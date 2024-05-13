@@ -1,3 +1,4 @@
+import time
 import requests
 import json
 import webbrowser
@@ -62,17 +63,24 @@ def listenUrl():
     soc.close()
     return extractCode(str(message.split()[1]))
 
+class song:
+    def __init__(self, name, artists):
+        self.name = name
+        self.artists = artists
+        self.lyrics = ""
+
 class session:
     def __init__(self):
         self.auth_code = ""
         self.access_token = ""
         self.refresh_token = ""
         self.expires_at = 3600
+        self.current_song = None
 
 
     def login(self):
-        #scope = "user-read-private user-read-email user-modify-playback-state user-read-playback-position user-library-read streaming user-read-playback-state user-read-recently-played playlist-read-private"
-        scope = "user-read-private user-read-email"
+        scope = "user-read-private user-read-email user-modify-playback-state user-read-playback-position user-library-read streaming user-read-playback-state user-read-recently-played playlist-read-private"
+        #scope = "user-read-private user-read-email"
 
         auth_headers = {
             'client_id': CLIENT_ID,
@@ -123,6 +131,7 @@ class session:
             return
 
         if self.tokenExpired():
+            print("Refreshing token")
             data = {
                 'grant_type': 'refresh_token',
                 'refresh_token': self.refresh_token,
@@ -131,13 +140,47 @@ class session:
             headers = {'Content-Type': 'application/x-www-form-urlencoded'}
 
             res = requests.post(TOKEN, data=data, headers=headers)
-            token_info = res.json()
-
-            self.access_token = token_info["access_token"]
-            self.expires_at = datetime.now().timestamp() + token_info["expires_in"]
+            if res.status_code == 200:
+                token_info = res.json()
+                self.access_token = token_info["access_token"]
+                self.expires_at = datetime.now().timestamp() + token_info["expires_in"]
+            else: print(f"Refreshing access_token failed, status: {res.status_code}")
 
     def tokenExpired(self):
         return datetime.now().timestamp() > self.expires_at
+
+    def getReq(self, url):
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        return requests.get(url, headers=headers)
+
+    def getCurrentSong(self):
+        res = self.getReq(CURRENTLYPLAYING)
+        curSong = res.json()
+        #print(curSong)
+        if res.status_code == 200 and curSong["is_playing"]:
+            songName = curSong["item"]["name"]
+            artists = [artist["name"] for artist in curSong["item"]["artists"]]
+            if (self.current_song is None or self.current_song.name != songName):
+                self.current_song = song(songName, artists)
+                print(f"Currently playing: {songName}")
+                print(f"Artist: {artists}")
+
+        elif res.status_code > 200:
+            print(f"Status: {curSong['error']['status']}, Message: {curSong['error']['message']}")
+
+        else: print("No song currently playing")
+
+    def searchLyrics(self):
+        if self.current_song is not None:
+            pass
+
+
+
+    def run(self):
+        while(True):
+            self.refresh()
+            self.getCurrentSong()
+            time.sleep(1)
 
     def startSession(self):
         loggedIn = self.login()
@@ -146,7 +189,8 @@ class session:
         if self.access_token == "": 
             print("Authentication failed!")
             exit(1)
-        else: print("Session started successfully!")
+        print("Session started successfully!")
+        self.run()
 
 def main():
     ses = session()
