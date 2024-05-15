@@ -8,6 +8,7 @@ import socket
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+from lyrics import lyricsFetcher
 
 
 load_dotenv()
@@ -76,6 +77,8 @@ class session:
         self.refresh_token = ""
         self.expires_at = 3600
         self.current_song = None
+        self.lyrics = None
+        self.lyrFetcher = lyricsFetcher()
 
 
     def login(self):
@@ -155,32 +158,54 @@ class session:
 
     def getCurrentSong(self):
         res = self.getReq(CURRENTLYPLAYING)
+        if res.status_code == 204: return # Empty res, no song playing
         curSong = res.json()
         #print(curSong)
-        if res.status_code == 200 and curSong["is_playing"]:
+        if res.status_code == 200 and curSong["item"] and curSong["is_playing"]:
             songName = curSong["item"]["name"]
             artists = [artist["name"] for artist in curSong["item"]["artists"]]
             if (self.current_song is None or self.current_song.name != songName):
+
+                os.system("cls")
+
                 self.current_song = song(songName, artists)
-                print(f"Currently playing: {songName}")
-                print(f"Artist: {artists}")
+                print("Getting lyrics...")
+                self.searchLyrics(songName, artists)
+                return True
 
         elif res.status_code > 200:
             print(f"Status: {curSong['error']['status']}, Message: {curSong['error']['message']}")
+        return False
 
-        else: print("No song currently playing")
-
-    def searchLyrics(self):
+    def searchLyrics(self, songName, artists):
+        #self.lyrics = None
         if self.current_song is not None:
-            pass
+            self.lyrics = self.lyrFetcher.getLyrics(songName, artists)
+
+    def printLyrics(self):
+        if self.lyrics:
+            for line in self.lyrics:
+                print(line)
+        else:
+            print("No lyrics..")
+
+        print("", flush=True)
+            
 
 
 
     def run(self):
         while(True):
             self.refresh()
-            self.getCurrentSong()
-            time.sleep(1)
+            songChanged = self.getCurrentSong()
+            if songChanged:
+                #self.searchLyrics()
+                os.system("cls")
+                print(f"Currently playing: {self.current_song.name}")
+                print(f"Artist: {self.current_song.artists}")
+                print()
+                self.printLyrics()
+            time.sleep(2)
 
     def startSession(self):
         loggedIn = self.login()

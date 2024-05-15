@@ -58,22 +58,28 @@ class lyricsFetcher:
             self.song_path = song_info["result"]["path"]
             self.song_name = songName
             self.artists = artists
+            return True
+
+        return False
+
 
 
     def getLyrics(self, songName, artists):
         if not self.access_token:
-            print("No access token")
-            return
-        self.searchSong(songName, artists)
-        page_url = GENIUS_URL + self.song_path
-        page = requests.get(page_url)
-        html = BeautifulSoup(page.text, "html.parser")
-        lyrics = html.find("div", attrs = {"id":"lyrics-root"})
-        #lyrics = html.find("div", attrs = {'data-lyrics-container': True})
-        if lyrics:
-            lyricsText = lyrics.get_text(separator = "\n", strip=True).split("\n")
-            lyricsText = lyricsText[next((i+1 for i,s in enumerate(lyricsText) if f"{self.song_name} Lyrics" in s), 0):-3]
-            return lyricsText
+            print("No access token for Genius API")
+            return None
+        found = self.searchSong(songName, artists)
+        if found:
+            page_url = GENIUS_URL + self.song_path
+            page = requests.get(page_url)
+            html = BeautifulSoup(page.text, "html.parser")
+            lyrics = html.find("div", attrs = {"id":"lyrics-root"})
+            #lyrics = html.find("div", attrs = {'data-lyrics-container': True})
+            if lyrics:
+                lyricsText = lyrics.get_text(separator = "\n", strip=True).split("\n")
+                #lyricsText = lyricsText[next((i+1 for i,s in enumerate(lyricsText) if f"{self.song_name} Lyrics" in s), 0):-3]
+                lyricsText = lyricsText[next((i+1 for i,s in enumerate(lyricsText) if f" Lyrics" in s), 0):-3]
+                return lyricsText
         return None
 
 
