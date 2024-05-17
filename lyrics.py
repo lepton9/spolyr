@@ -18,6 +18,7 @@ CLIENT_ID = os.getenv("GENIUS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("GENIUS_CLIENT_SECRET")
 CLIENT_TOKEN = os.getenv("GENIUS_TOKEN") # Also valid as the access_token
 
+
 class lyricsFetcher:
     def __init__(self):
         self.song_id = ""
@@ -27,6 +28,10 @@ class lyricsFetcher:
         self.getAccessToken()
 
     def getAccessToken(self):
+        if not CLIENT_ID or not CLIENT_SECRET:
+            print("Set environment variables: CLIENT_ID | CLIENT_SECRET")
+            return
+
         encoded_credentials = base64.b64encode(CLIENT_ID.encode() + b':' + CLIENT_SECRET.encode()).decode("utf-8")
 
         headers = {
@@ -62,8 +67,6 @@ class lyricsFetcher:
 
         return False
 
-
-
     def getLyrics(self, songName, artists):
         if not self.access_token:
             print("No access token for Genius API")
@@ -83,10 +86,11 @@ class lyricsFetcher:
         return None
 
 
-
+"""
 if __name__ == "__main__":
     lf = lyricsFetcher()
-    lyrics = lf.getLyrics("euphoria", ["Kendrick Lamar"])
+    lyrics = lf.getLyrics("SongName", ["Artists"])
     print(lyrics)
+"""
     
 

@@ -7,6 +7,8 @@ import base64
 import socket
 from datetime import datetime, timedelta
 import os
+from sys import exit
+import keyboard
 from dotenv import load_dotenv
 from lyrics import lyricsFetcher
 
@@ -31,13 +33,14 @@ TRACKS = "https://api.spotify.com/v1/playlists/{{PlaylistId}}/tracks"
 CURRENTLYPLAYING = "https://api.spotify.com/v1/me/player/currently-playing"
 SHUFFLE = "https://api.spotify.com/v1/me/player/shuffle"
 
+NEXT_SONG_KEY = 'n'
+PREVIOUS_SONG_KEY = 'p'
+TOGGLEPLAYBACK_KEY = 'space'
+EXIT_KEY = 'q'
 
-def urlParams(payload):
-    res = "?"
-    for key, value in payload.items():
-        if len(res) > 1: res += "&"
-        res += key + "=" + value
-    return res
+
+def clearScreen():
+    os.system("cls" if os.name == "nt" else "clear")
 
 def extractCode(s):
     start = s.find("code=")
@@ -72,6 +75,7 @@ class song:
 
 class session:
     def __init__(self):
+        self.exitFlag = False
         self.auth_code = ""
         self.access_token = ""
         self.refresh_token = ""
@@ -156,6 +160,10 @@ class session:
         headers = {"Authorization": f"Bearer {self.access_token}"}
         return requests.get(url, headers=headers)
 
+    def postReq(self, url):
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        return requests.post(url, headers=headers)
+
     def getCurrentSong(self):
         res = self.getReq(CURRENTLYPLAYING)
         if res.status_code == 204: return # Empty res, no song playing
@@ -166,8 +174,7 @@ class session:
             artists = [artist["name"] for artist in curSong["item"]["artists"]]
             if (self.current_song is None or self.current_song.name != songName):
 
-                os.system("cls")
-
+                clearScreen()
                 self.current_song = song(songName, artists)
                 print("Getting lyrics...")
                 self.searchLyrics(songName, artists)
@@ -182,38 +189,75 @@ class session:
         if self.current_song is not None:
             self.lyrics = self.lyrFetcher.getLyrics(songName, artists)
 
+
+# Only works on spotify premium user
+    def nextSong(self, event):
+        res = self.postReq(NEXT)
+
+    def previousSong(self, event):
+        res = self.postReq(PREVIOUS)
+
+    def togglePlayback(self, event):
+        res = self.getReq(PLAYER)
+        if res.status_code == 200 and res.json()["is_playing"]:
+            res = self.postReq(PAUSE)
+        else:
+            res = self.postReq(PLAY)
+
+
+    def exitSession(self, event):
+        clearScreen()
+        print("Exiting program..\n")
+        self.exitFlag = True
+
+
     def printLyrics(self):
+        clearScreen()
+        print(f"Currently playing: {self.current_song.name}")
+        print(f"Artists: {self.current_song.artists}")
+        print()
+
         if self.lyrics:
             for line in self.lyrics:
+                if line.startswith("[") and line.endswith("]"):
+                    print()
                 print(line)
         else:
-            print("No lyrics..")
+            print("No lyrics found..")
 
-        print("", flush=True)
+        #keyboard.send("ctrl+home")
+        #print("", flush=True)
             
-
 
 
     def run(self):
         while(True):
             self.refresh()
+
+            keyboard.on_release_key(NEXT_SONG_KEY, self.nextSong, True)
+            keyboard.on_release_key(PREVIOUS_SONG_KEY, self.previousSong, True)
+            keyboard.on_release_key(TOGGLEPLAYBACK_KEY, self.togglePlayback, True)
+            keyboard.on_release_key(EXIT_KEY, self.exitSession, True)
+            
+            if self.exitFlag:
+                exit(0)
+
             songChanged = self.getCurrentSong()
             if songChanged:
-                #self.searchLyrics()
-                os.system("cls")
-                print(f"Currently playing: {self.current_song.name}")
-                print(f"Artist: {self.current_song.artists}")
-                print()
                 self.printLyrics()
             time.sleep(2)
 
     def startSession(self):
-        loggedIn = self.login()
-        self.fetchAccessToken()
+        if CLIENT_ID and CLIENT_SECRET:
+            loggedIn = self.login()
+            self.fetchAccessToken()
+        else:
+            print("Set environment variables: CLIENT_ID | CLIENT_SECRET")
 
         if self.access_token == "": 
             print("Authentication failed!")
             exit(1)
+        clearScreen()
         print("Session started successfully!")
         self.run()
 
